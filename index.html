@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>主人公ストーリーデモ（第2話まで）</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 24px auto; padding: 0 12px; }
+    label { display:block; margin-top: 12px; font-weight: 600; }
+    input, select { width: 100%; padding: 10px; margin-top: 6px; }
+    button { margin-top: 16px; padding: 12px 16px; width: 100%; font-weight: 700; }
+    .box { white-space: pre-wrap; background: #f6f6f6; padding: 14px; border-radius: 10px; margin-top: 14px; }
+    .choices button { width: 100%; margin-top: 10px; font-weight: 700; }
+    small { color: #555; }
+    .row { display:flex; gap: 10px; }
+    .row > div { flex: 1; }
+  </style>
+</head>
+<body>
+  <h1>あなた専用ストーリー（第2話まで）</h1>
+
+  <form id="f">
+    <div class="row">
+      <div>
+        <label>ニックネーム</label>
+        <input name="nickname" placeholder="例：もえ" required />
+      </div>
+      <div>
+        <label>学年（年齢）</label>
+        <input name="gradeOrAge" placeholder="例：小学3年生 / 9歳" required />
+      </div>
+    </div>
+
+    <label>好きなこと（複数OK）</label>
+    <small>例：ゲーム / 作る / 動かす / 人を助ける / 謎解き</small>
+    <input name="likes" placeholder="例：動かす, 謎解き" required />
+
+    <div class="row">
+      <div>
+        <label>どっちがすき？</label>
+        <select name="thinkingStyle" required>
+          <option value="ひらめく">ひらめく</option>
+          <option value="じっくり">じっくり考える</option>
+        </select>
+      </div>
+      <div>
+        <label>どっちがすき？</label>
+        <select name="socialStyle" required>
+          <option value="みんな">みんな</option>
+          <option value="ひとり">ひとり</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>（裏側）テック経験レベル</label>
+        <select name="techLevel">
+          <option value="初めて">初めて</option>
+          <option value="ちょっと知ってる">ちょっと知ってる</option>
+        </select>
+      </div>
+      <div>
+        <label>（裏側）刺激耐性</label>
+        <select name="stimulusTolerance">
+          <option value="優しめ">優しめ</option>
+          <option value="強め">音・光が強くてもOK</option>
+        </select>
+      </div>
+    </div>
+
+    <button type="submit">第1話を生成する</button>
+  </form>
+
+  <div id="out" class="box" style="display:none;"></div>
+
+  <h2 id="choiceTitle" style="display:none;">つづきはどっち？（第2話へ）</h2>
+  <div class="choices" id="choices"></div>
+
+  <script>
+    const f = document.getElementById("f");
+    const out = document.getElementById("out");
+    const choicesEl = document.getElementById("choices");
+    const choiceTitle = document.getElementById("choiceTitle");
+
+    // 第2話生成に使う「前回要約」を保持
+    let lastSummary = null;
+    // 入力属性も保持（第2話も同じ主人公で作る）
+    let lastPayloadBase = null;
+
+    function parseLikes(s) {
+      return s.split(",").map(x => x.trim()).filter(Boolean);
+    }
+
+    function renderEpisode(data) {
+      out.style.display = "block";
+
+      out.textContent =
+        `【第${data.episode}話：${data.title}】\n\n` +
+        `${data.story}\n\n` +
+        `---\n` +
+        `【転のヒント】\n` +
+        `${data.roleReveal.kidsRole}（本当は：${data.roleReveal.realRole}）\n` +
+        `${data.roleReveal.oneLine}\n` +
+        `\n---\n` +
+        `（裏側）次回要約：${data.hidden.nextSummary}\n` +
+        `（裏側）stats：courage=${data.hidden.stats.courage}, trust=${data.hidden.stats.trust}, curiosity=${data.hidden.stats.curiosity}\n`;
+
+      lastSummary = data.hidden.nextSummary;
+
+      // choices描画
+      choicesEl.innerHTML = "";
+      choiceTitle.style.display = "block";
+
+      data.choices.forEach(c => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `${c.id}. ${c.text}（${c.hint}）`;
+        btn.onclick = () => generateEpisode2(c);
+        choicesEl.appendChild(btn);
+      });
+    }
+
+    async function postStory(payload) {
+      const r = await fetch("/api/story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return await r.json();
+    }
+
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      out.style.display = "block";
+      out.textContent = "第1話を生成中…";
+      choicesEl.innerHTML = "";
+      choiceTitle.style.display = "none";
+
+      const form = new FormData(f);
+      const base = {
+        nickname: form.get("nickname"),
+        gradeOrAge: form.get("gradeOrAge"),
+        likes: parseLikes(form.get("likes")),
+        thinkingStyle: form.get("thinkingStyle"),
+        socialStyle: form.get("socialStyle"),
+        techLevel: form.get("techLevel"),
+        stimulusTolerance: form.get("stimulusTolerance"),
+      };
+      lastPayloadBase = base;
+
+      try {
+        const data = await postStory(base);
+        renderEpisode(data);
+      } catch (err) {
+        out.textContent = "エラー：\n" + String(err);
+      }
+    });
+
+    async function generateEpisode2(choice) {
+      if (!lastPayloadBase || !lastSummary) {
+        alert("先に第1話を生成してね！");
+        return;
+      }
+
+      out.style.display = "block";
+      out.textContent = "第2話を生成中…";
+      choicesEl.innerHTML = "";
+      choiceTitle.style.display = "none";
+
+      const payload = {
+        ...lastPayloadBase,
+        previousSummary: lastSummary,
+        choiceId: choice.id,
+        choiceText: choice.text
+      };
+
+      try {
+        const data = await postStory(payload);
+        renderEpisode(data);
+
+        // 第2話の後は「もう一度」用に案内（デモならここで終わりでもOK）
+        choiceTitle.textContent = "（デモ）さらに続けるなら第3話も同じ方式で追加できます";
+      } catch (err) {
+        out.textContent = "エラー：\n" + String(err);
+      }
+    }
+  </script>
+</body>
+</html>
