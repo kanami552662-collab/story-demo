@@ -167,17 +167,23 @@ ${roleTable}
 `;
 
     const r = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        input: prompt,
-        response_format: { type: "json_schema", json_schema: schema }
-      })
-    });
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    model: "gpt-4.1-mini",
+    input: prompt,
+    text: {
+      format: {
+        type: "json_schema",
+        json_schema: schema
+      }
+    }
+  })
+});
+
 
     if (!r.ok) {
       const errText = await r.text();
