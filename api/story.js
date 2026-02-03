@@ -178,6 +178,7 @@ ${roleTable}
     text: {
       format: {
         type: "json_schema",
+        name: "story_response",
         json_schema: schema
       }
     }
